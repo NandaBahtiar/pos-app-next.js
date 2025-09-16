@@ -1,0 +1,138 @@
+// datasource db mendefinisikan koneksi database
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // <-- Tambahkan ini
+}
+
+// generator client memberitahu Prisma untuk men-generate Prisma Client
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- AUTENTIKASI & PENGGUNA ---
+model profiles {
+  id     String     @id @db.Uuid
+  name   String
+  role   UserRole   @default(CASHIER)
+  status UserStatus @default(PENDING)
+
+  transactions Transaction[]
+}
+
+enum UserRole {
+  ADMIN
+  CASHIER
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+// --- MANAJEMEN PRODUK ---
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
+model Product {
+  id        String   @id @default(cuid())
+  name      String
+  price     Float
+  stock     Int
+  sku       String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  transactionItems TransactionItem[]
+  stockMovements   StockMovement[]
+}
+
+// --- MANAJEMEN INVENTARIS ---
+model StockMovement {
+  id        String            @id @default(cuid())
+  quantity  Int // positif untuk MASUK, negatif untuk KELUAR
+  type      StockMovementType
+  notes     String?
+  createdAt DateTime          @default(now())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+enum StockMovementType {
+  IN // Stok masuk dari supplier
+  SALE // Stok keluar karena penjualan
+  ADJUSTMENT // Penyesuaian stok (stock opname)
+  DAMAGE // Barang rusak
+}
+
+// --- TRANSAKSI & PENJUALAN ---
+model Transaction {
+  id            String        @id @default(cuid())
+  totalAmount   Float
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  status        PaymentStatus @default(PENDING)
+  snapToken     String?       @unique
+  paymentMethod String?
+
+  userId String   @db.Uuid
+  user   profiles @relation(fields: [userId], references: [id])
+
+  items     TransactionItem[]
+  discounts TransactionDiscount[]
+}
+
+model TransactionItem {
+  id          String @id @default(cuid())
+  quantity    Int
+  priceAtSale Float
+
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+}
+
+// --- PROMOSI ---
+model Discount {
+  id           String                @id @default(cuid())
+  name         String
+  type         DiscountType
+  value        Float
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean               @default(true)
+  transactions TransactionDiscount[]
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// Tabel penghubung untuk relasi many-to-many antara Transaction dan Discount
+model TransactionDiscount {
+  transactionId  String
+  discountId     String
+  amountDeducted Float
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  discount    Discount    @relation(fields: [discountId], references: [id])
+
+  @@id([transactionId, discountId])
+}

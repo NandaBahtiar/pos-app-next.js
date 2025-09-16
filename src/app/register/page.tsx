@@ -32,7 +32,7 @@ export default function RegisterPage() {
         if (error) {
             setMessage('Gagal mendaftar: ' + error.message);
         } else {
-            setMessage('Pendaftaran berhasil! Silakan tunggu persetujuan dari Admin sebelum login.');
+            setMessage('Pendaftaran berhasil! Silakan verifikasi di email.');
         }
     };
 
